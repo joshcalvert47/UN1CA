@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<siop_model>
+    <file_version>1</file_version>
+    <device_name>a42xq</device_name>
+    <component name="SSRM">
+        <group name="PROXIMITY">
+            <threshold level="0" temp="350" />
+            <threshold level="1" temp="400" />
+        </group>
+        <group name="CPU">
+            <policy name="LITTLE" type="frequency" value="1804800" />
+            <policy name="BIG" type="frequency" value="2208000" />
+        </group>
+        <group name="GPU">
+            <policy type="frequency" value="825000000" />
+        </group>
+    </component>
+</siop_model>
