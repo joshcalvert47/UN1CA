@@ -1,0 +1,98 @@
+name: Build A42xq from ROM ZIP
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_zip_url:
+        description: "HTTPS URL of the flashable ROM ZIP containing *.new.dat.br partitions"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Galaxy A42 5G (a42xq)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo docker builder prune -a --force
+
+      - name: Set up build environment
+        run: |
+          sudo apt update
+          DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
+            attr ccache clang ffmpeg libbrotli-dev libbz2-dev \
+            libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
+            libzstd-dev linux-modules-extra-$(uname -r) lld protobuf-compiler webp
+          sudo modprobe erofs f2fs
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Download input ROM ZIP
+        env:
+          ROM_ZIP_URL: ${{ inputs.rom_zip_url }}
+        run: |
+          case "$ROM_ZIP_URL" in
+            https://*.zip|https://*.zip\?*) ;;
+            *)
+              echo "rom_zip_url must be an HTTPS URL ending in .zip" >&2
+              exit 1
+              ;;
+          esac
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            --retry 3 --retry-delay 5 --output "$RUNNER_TEMP/input-rom.zip" "$ROM_ZIP_URL"
+          unzip -tq "$RUNNER_TEMP/input-rom.zip"
+
+      - name: Generate build config
+        run: |
+          source ./buildenv.sh a42xq
+          {
+            echo "DEBUG=$DEBUG"
+            echo "SRC_DIR=$SRC_DIR"
+            echo "OUT_DIR=$OUT_DIR"
+            echo "ODIN_DIR=$ODIN_DIR"
+            echo "FW_DIR=$FW_DIR"
+            echo "TOOLS_DIR=$TOOLS_DIR"
+            echo "APKTOOL_DIR=$APKTOOL_DIR"
+            echo "WORK_DIR=$WORK_DIR"
+            echo "TMP_DIR=$TMP_DIR"
+          } >> "$GITHUB_ENV"
+          sed -e '/Automatically/d' -e 's/"//g' "$OUT_DIR/config.sh" >> "$GITHUB_ENV"
+          echo "$TOOLS_DIR/bin" >> "$GITHUB_PATH"
+
+      - name: Build dependencies
+        run: ./scripts/build_dependencies.sh
+
+      - name: Build ROM
+        run: ./scripts/make_rom.sh --input-rom-zip "$RUNNER_TEMP/input-rom.zip"
+
+      - name: Upload generated ROM ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: a42xq-roms-${{ github.run_number }}
+          if-no-files-found: error
+          path: |
+            out/*-target_files.zip
+            out/UN1CA_*.zip

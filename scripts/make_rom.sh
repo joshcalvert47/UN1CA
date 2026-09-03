@@ -9,6 +9,7 @@ FORCE=false
 BUILD_ROM=false
 BUILD_TARGET_FILES=true
 BUILD_FLASHABLE_ZIP=false
+INPUT_ROM_ZIP=""
 
 START_TIME="$(date +%s)"
 
@@ -39,12 +40,20 @@ BUILD_APKS()
 
 GET_WORK_DIR_HASH()
 {
+    local HASH
+
     if [ "${TARGET_PLATFORM//none/}" ] && [ -d "$SRC_DIR/platform/$TARGET_PLATFORM" ]; then
-        find "$SRC_DIR/unica" "$SRC_DIR/platform/$TARGET_PLATFORM" "$SRC_DIR/target/$TARGET_CODENAME" -type f -print0 | \
-            sort -z | xargs -0 sha1sum | sha1sum | cut -d " " -f 1
+        HASH="$(find "$SRC_DIR/unica" "$SRC_DIR/platform/$TARGET_PLATFORM" "$SRC_DIR/target/$TARGET_CODENAME" -type f -print0 | \
+            sort -z | xargs -0 sha1sum | sha1sum | cut -d " " -f 1)"
     else
-        find "$SRC_DIR/unica" "$SRC_DIR/target/$TARGET_CODENAME" -type f -print0 | \
-            sort -z | xargs -0 sha1sum | sha1sum | cut -d " " -f 1
+        HASH="$(find "$SRC_DIR/unica" "$SRC_DIR/target/$TARGET_CODENAME" -type f -print0 | \
+            sort -z | xargs -0 sha1sum | sha1sum | cut -d " " -f 1)"
+    fi
+
+    if [ "$INPUT_ROM_ZIP" ]; then
+        echo -n "$(sha1sum "$INPUT_ROM_ZIP" | cut -d " " -f 1)$HASH" | sha1sum | cut -d " " -f 1
+    else
+        echo "$HASH"
     fi
 }
 
@@ -57,6 +66,18 @@ PREPARE_SCRIPT()
             BUILD_TARGET_FILES=false
             BUILD_FLASHABLE_ZIP=false
         elif [[ "$1" == "--build-rom-zip" ]] || [[ "$1" == "-z" ]]; then
+            BUILD_TARGET_FILES=true
+            BUILD_FLASHABLE_ZIP=true
+        elif [[ "$1" == "--input-rom-zip" ]] || [[ "$1" == "--input-zip" ]]; then
+            shift
+            INPUT_ROM_ZIP="$1"
+            if [ ! "$INPUT_ROM_ZIP" ] || [ ! -f "$INPUT_ROM_ZIP" ]; then
+                LOGE "File not found: ${INPUT_ROM_ZIP//$SRC_DIR\//}"
+                exit 1
+            elif [[ "$INPUT_ROM_ZIP" != *".zip" ]]; then
+                LOGE "Input ROM file must have \".zip\" extension"
+                exit 1
+            fi
             BUILD_TARGET_FILES=true
             BUILD_FLASHABLE_ZIP=true
         else
@@ -95,10 +116,17 @@ PRINT_USAGE()
     echo " -f, --force : Force ROM build" >&2
     echo " -x, --no-target-files : Do not build target-files zip" >&2
     echo " -z, --build-rom-zip : Build flashable zip" >&2
+    echo " --input-rom-zip, --input-zip <file> : Use a flashable ROM zip as the OS source and apply UN1CA patches without device file swaps" >&2
 }
 # ]
 
 PREPARE_SCRIPT "$@"
+
+if [ "$INPUT_ROM_ZIP" ]; then
+    # Keep firmware-dependent UN1CA conditionals pointed at the supplied ROM.
+    export FW_DIR="$OUT_DIR/target/$TARGET_CODENAME/input_rom_fw"
+    export INPUT_ROM_ZIP
+fi
 
 if $FORCE; then
     BUILD_ROM=true
@@ -123,7 +151,11 @@ if $BUILD_ROM; then
     [ -d "$APKTOOL_DIR" ] && rm -rf "$APKTOOL_DIR"
     [ -f "$WORK_DIR/.completed" ] && rm -f "$WORK_DIR/.completed"
 
-    if [ ! -f "$FW_DIR/$SOURCE_FIRMWARE_PATH/.extracted" ] || [ ! -f "$FW_DIR/$TARGET_FIRMWARE_PATH/.extracted" ]; then
+    if [ "$INPUT_ROM_ZIP" ]; then
+        LOG_STEP_IN true "Creating work dir from input ROM zip"
+        bash "$SRC_DIR/scripts/internal/create_work_dir_from_zip.sh" "$INPUT_ROM_ZIP" || exit 1
+        LOG_STEP_OUT
+    elif [ ! -f "$FW_DIR/$SOURCE_FIRMWARE_PATH/.extracted" ] || [ ! -f "$FW_DIR/$TARGET_FIRMWARE_PATH/.extracted" ]; then
         if [ ! -f "$ODIN_DIR/$SOURCE_FIRMWARE_PATH/.downloaded" ] || [ ! -f "$ODIN_DIR/$TARGET_FIRMWARE_PATH/.downloaded" ]; then
             LOG_STEP_IN true "Downloading required firmwares"
             "$SRC_DIR/scripts/download_fw.sh" || exit 1
@@ -134,16 +166,18 @@ if $BUILD_ROM; then
         LOG_STEP_OUT
     fi
 
-    LOG_STEP_IN true "Creating work dir"
-    "$SRC_DIR/scripts/internal/create_work_dir.sh" || exit 1
-    LOG_STEP_OUT
+    if [ ! "$INPUT_ROM_ZIP" ]; then
+        LOG_STEP_IN true "Creating work dir"
+        "$SRC_DIR/scripts/internal/create_work_dir.sh" || exit 1
+        LOG_STEP_OUT
+    fi
 
-    if [ -d "$SRC_DIR/platform/$TARGET_PLATFORM/patches" ]; then
+    if [ ! "$INPUT_ROM_ZIP" ] && [ -d "$SRC_DIR/platform/$TARGET_PLATFORM/patches" ]; then
         LOG_STEP_IN true "Applying platform patches"
         "$SRC_DIR/scripts/internal/apply_modules.sh" "$SRC_DIR/platform/$TARGET_PLATFORM/patches" || exit 1
         LOG_STEP_OUT
     fi
-    if [ -d "$SRC_DIR/target/$TARGET_CODENAME/patches" ]; then
+    if [ ! "$INPUT_ROM_ZIP" ] && [ -d "$SRC_DIR/target/$TARGET_CODENAME/patches" ]; then
         LOG_STEP_IN true "Applying device patches"
         "$SRC_DIR/scripts/internal/apply_modules.sh" "$SRC_DIR/target/$TARGET_CODENAME/patches" || exit 1
         LOG_STEP_OUT
@@ -173,6 +207,10 @@ if $BUILD_TARGET_FILES || $BUILD_FLASHABLE_ZIP; then
         ZIP_FILE_NAME+="$ROM_VERSION"
     fi
     ZIP_FILE_NAME+="-target_files.zip"
+
+    if [ "$INPUT_ROM_ZIP" ] && [ -f "$OUT_DIR/$ZIP_FILE_NAME" ]; then
+        rm -f "$OUT_DIR/$ZIP_FILE_NAME"
+    fi
 
     if [ ! -f "$OUT_DIR/$ZIP_FILE_NAME" ]; then
         LOG_STEP_IN true "Creating target-files zip"

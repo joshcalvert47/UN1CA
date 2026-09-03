@@ -201,6 +201,23 @@ ADD_TO_WORK_DIR()
     local MODE="$6"
     local LABEL="$7"
 
+    # In input-ROM mode only files bundled by the current module may be added.
+    # This prevents firmware, target, and prebuilt donor files from being copied.
+    if [ "$INPUT_ROM_ZIP" ]; then
+        if [ ! "$INPUT_ROM_MODULE_PATH" ]; then
+            LOGW "Skipping file addition without an input-ROM module context"
+            return 0
+        fi
+        case "$SOURCE" in
+            "$INPUT_ROM_MODULE_PATH"|"$INPUT_ROM_MODULE_PATH"/*)
+                ;;
+            *)
+                LOGW "Skipping donor file addition from \"$SOURCE\" in input ROM mode"
+                return 0
+                ;;
+        esac
+    fi
+
     if [ ! -d "$SOURCE" ]; then
         if [ "$(cut -d "/" -f 2 -s <<< "$SOURCE")" ]; then
             SOURCE="$FW_DIR/$(cut -d "/" -f 1 <<< "$SOURCE")_$(cut -d "/" -f 2 <<< "$SOURCE")"

@@ -24,6 +24,14 @@ The UN1CA build system automatically builds the required tools, downloads and ex
 
 The goal is to deliver a fast, smooth and modern UX while offering additional tools, modifications and system‑level enhancements tailored for power users.
 
+To patch an existing flashable ROM ZIP without importing another device's system files, pass it to `make_rom` after sourcing the target configuration:
+
+```bash
+./scripts/make_rom.sh --input-rom-zip /path/to/rom.zip
+```
+
+This mode unpacks the ZIP's `.new.dat.br` partitions, uses them as the work-directory source, skips target/platform firmware replacement stages, and applies only input-safe UN1CA modules. Use `--force` to rebuild after changing the input archive.
+
 Any form of contribution, suggestions, bug report or feature request for the project will be welcome.
 
 # Features

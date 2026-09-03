@@ -12,6 +12,7 @@ APPLY_MODULE()
     local MODPATH="$1"
     local MODNAME
     local MODAUTH
+    local MODULE_ID
 
     if [ ! -d "$MODPATH" ]; then
         LOGE "Folder not found: ${MODPATH//$SRC_DIR\//}"
@@ -28,11 +29,24 @@ APPLY_MODULE()
     elif [ -f "$MODPATH/disable" ]; then
         return 0
     else
+        MODULE_ID="$(grep "^id" "$MODPATH/module.prop" | sed "s/id=//")"
+        if [ "$INPUT_ROM_ZIP" ]; then
+            case "$MODULE_ID" in
+                camera|dvfs|prophide|rro|saiv|spen|stock_blobs|uwb|vintf|vndk)
+                    LOG "\033[0;33m! Skipping $MODULE_ID in input ROM mode (target firmware replacement)\033[0m"
+                    return 0
+                    ;;
+            esac
+        fi
         MODNAME="$(grep "^name" "$MODPATH/module.prop" | sed "s/name=//")"
         MODAUTH="$(grep "^author" "$MODPATH/module.prop" | sed "s/author=//" | sed "s/, /, @/g")"
     fi
 
     LOG_STEP_IN "- Processing \"$MODNAME\" by @$MODAUTH"
+
+    if [ "$INPUT_ROM_ZIP" ]; then
+        export INPUT_ROM_MODULE_PATH="$MODPATH"
+    fi
 
     if ! grep -q "^SKIPUNZIP=1$" "$MODPATH/customize.sh" 2> /dev/null; then
         if [ -d "$MODPATH/odm" ]; then
@@ -64,6 +78,9 @@ APPLY_MODULE()
         done < <(find "$MODPATH/smali" -type d \( -name "*.apk" -o -name "*.jar" \) | sed "s|$MODPATH/smali/||")
     fi
 
+    if [ "$INPUT_ROM_ZIP" ]; then
+        unset INPUT_ROM_MODULE_PATH
+    fi
     LOG_STEP_OUT
 
     return 0
