@@ -64,7 +64,7 @@ jobs:
           esac
           python3 -m venv "$RUNNER_TEMP/gdown-venv"
           "$RUNNER_TEMP/gdown-venv/bin/pip" install --disable-pip-version-check --no-cache-dir gdown
-          "$RUNNER_TEMP/gdown-venv/bin/gdown" --fuzzy --continue \
+          "$RUNNER_TEMP/gdown-venv/bin/gdown" --continue \
             --output "$RUNNER_TEMP/input-rom.zip" "$ROM_ZIP_URL"
           unzip -tq "$RUNNER_TEMP/input-rom.zip"
 
