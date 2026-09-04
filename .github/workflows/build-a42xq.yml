@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rom_zip_url:
-        description: "HTTPS URL of the flashable ROM ZIP containing *.new.dat.br partitions"
+        description: "Public Google Drive share URL for the flashable ROM ZIP (Anyone with the link can view)"
         required: true
         type: string
 
@@ -38,7 +38,8 @@ jobs:
           DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             attr ccache clang ffmpeg libbrotli-dev libbz2-dev \
             libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
-            libzstd-dev linux-modules-extra-$(uname -r) lld protobuf-compiler webp
+            libzstd-dev linux-modules-extra-$(uname -r) lld protobuf-compiler \
+            python3-venv webp
           sudo modprobe erofs f2fs
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -50,19 +51,21 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Download input ROM ZIP
+      - name: Download input ROM ZIP from Google Drive
         env:
           ROM_ZIP_URL: ${{ inputs.rom_zip_url }}
         run: |
           case "$ROM_ZIP_URL" in
-            https://*.zip|https://*.zip\?*) ;;
+            https://drive.google.com/*|https://drive.usercontent.google.com/*) ;;
             *)
-              echo "rom_zip_url must be an HTTPS URL ending in .zip" >&2
+              echo "rom_zip_url must be a Google Drive sharing URL" >&2
               exit 1
               ;;
           esac
-          curl --fail --location --proto '=https' --proto-redir '=https' \
-            --retry 3 --retry-delay 5 --output "$RUNNER_TEMP/input-rom.zip" "$ROM_ZIP_URL"
+          python3 -m venv "$RUNNER_TEMP/gdown-venv"
+          "$RUNNER_TEMP/gdown-venv/bin/pip" install --disable-pip-version-check --no-cache-dir gdown
+          "$RUNNER_TEMP/gdown-venv/bin/gdown" --fuzzy --continue \
+            --output "$RUNNER_TEMP/input-rom.zip" "$ROM_ZIP_URL"
           unzip -tq "$RUNNER_TEMP/input-rom.zip"
 
       - name: Generate build config
