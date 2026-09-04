@@ -84,13 +84,20 @@ def main():
         operation = parts[0]
         ranges = parse_ranges(parts[1]) if len(parts) == 2 else []
         operations.append((operation, ranges))
+
+    # Some tools emit ranges that extend past the header block count (e.g. image
+    # padding added after the count was computed). Reference sdat2img simply lets
+    # writes extend the image, so size the output from the highest referenced
+    # block rather than rejecting such lists.
+    image_blocks = total_blocks
+    for _, ranges in operations:
         for _, end in ranges:
-            if end > total_blocks:
-                raise ValueError(f"range exceeds transfer-list block count: {end} > {total_blocks}")
+            if end > image_blocks:
+                image_blocks = end
 
     zero_chunk = b"\0" * (4 * 1024 * 1024)
     with open(payload_path, "rb") as payload_file, open(output_path, "wb") as output:
-        output.truncate(total_blocks * BLOCK_SIZE)
+        output.truncate(image_blocks * BLOCK_SIZE)
         for operation, ranges in operations:
             if operation == "new":
                 copy_ranges(output, ranges, payload_file)
@@ -106,9 +113,6 @@ def main():
                 raise ValueError(f"unsupported operation in full image: {operation}")
             else:
                 raise ValueError(f"unknown transfer operation: {operation}")
-
-        if payload_file.read(1):
-            raise ValueError("new.dat has unused bytes")
 
     return 0
 

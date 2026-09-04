@@ -9,12 +9,7 @@ ZIP_FILE="$1"
 INPUT_DIR="$TMP_DIR/input_rom_zip"
 MOUNT_DIR="$TMP_DIR/input_rom_mount"
 
-CLEANUP()
-{
-    [ -d "$MOUNT_DIR" ] && sudo umount "$MOUNT_DIR" &> /dev/null || true
-    rm -rf "$INPUT_DIR" "$MOUNT_DIR" "$TMP_DIR/input_rom_partitions"
-}
-trap CLEANUP EXIT INT
+trap '[ -d "$MOUNT_DIR" ] && sudo umount "$MOUNT_DIR" &> /dev/null || true; rm -rf "$INPUT_DIR" "$MOUNT_DIR" "$TMP_DIR/input_rom_partitions"' EXIT INT
 PARTITIONS="system vendor product system_ext odm vendor_dlkm odm_dlkm system_dlkm"
 KERNEL_BINS="boot.img dt.img dtbo.img init_boot.img vendor_boot.img recovery.img"
 
