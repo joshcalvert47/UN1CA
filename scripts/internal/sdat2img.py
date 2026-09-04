@@ -12,13 +12,13 @@ def parse_ranges(value):
     values = [int(item) for item in value.split(",") if item]
     if not values:
         return []
-    count = values[0]
-    if len(values) != 1 + count * 2:
+    endpoint_count = values[0]
+    if endpoint_count < 0 or endpoint_count % 2 != 0 or len(values) != 1 + endpoint_count:
         raise ValueError(f"invalid range list: {value}")
     ranges = []
-    for index in range(count):
-        start = values[1 + index * 2]
-        end = values[2 + index * 2]
+    for index in range(0, endpoint_count, 2):
+        start = values[1 + index]
+        end = values[2 + index]
         if start < 0 or end < start:
             raise ValueError(f"invalid range: {start},{end}")
         ranges.append((start, end))
