@@ -1,9 +1,17 @@
 SOURCE_FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$SOURCE_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$SOURCE_FIRMWARE")"
+BT_APEX="$WORK_DIR/system/system/apex/com.android.bt.apex"
+SOURCE_BT_APEX="$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/apex/com.android.bt.apex"
 
-if [[ "$(sha1sum "$WORK_DIR/system/system/apex/com.android.bt.apex" | cut -d " " -f 1)" != \
-        "$(sha1sum "$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/apex/com.android.bt.apex" | cut -d " " -f 1)" ]]; then
+if [ ! -f "$BT_APEX" ] || [ ! -f "$SOURCE_BT_APEX" ]; then
+    LOG "\033[0;33m! Bluetooth APEX not found; skipping Bluetooth patches\033[0m"
+    unset SOURCE_FIRMWARE_PATH BT_APEX SOURCE_BT_APEX
+    return 0
+fi
+
+if [[ "$(sha1sum "$BT_APEX" | cut -d " " -f 1)" != \
+        "$(sha1sum "$SOURCE_BT_APEX" | cut -d " " -f 1)" ]]; then
     LOG "\033[0;33m! Nothing to do\033[0m"
-    unset SOURCE_FIRMWARE_PATH
+    unset SOURCE_FIRMWARE_PATH BT_APEX SOURCE_BT_APEX
     return 0
 fi
 
